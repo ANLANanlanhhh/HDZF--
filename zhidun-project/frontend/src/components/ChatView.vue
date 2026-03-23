@@ -70,7 +70,7 @@ const messages = ref([
 ])
 const userInput = ref('')
 const showAlert = ref(false)
-const API_URL = 'http://localhost:8000'
+const API_URL = 'https://zhidun.onrender.com'
 const isTyping = ref(false)
 /** 聊天请求超时（毫秒），避免卡住导致 isTyping 永远为 true、语音也无法再发 */
 const CHAT_FETCH_MS = 120000

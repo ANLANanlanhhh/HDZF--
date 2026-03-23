@@ -86,8 +86,8 @@ const totalScore = ref(100)
 
 onMounted(async () => {
   try {
-    // 假设你的后端跑在 8000 端口，和 ChatView 保持一致
-    const response = await fetch('http://localhost:8000/api/scenarios') 
+    // 替换为线上后端地址
+    const response = await fetch('https://zhidun.onrender.com/api/scenarios') 
     const data = await response.json()
     scenariosData.value = data
   } catch (error) {
