@@ -1,24 +1,28 @@
 <template>
   <div class="report-view">
-    <div class="controls-bar">
-      <button class="back-btn" @click="goBack">⬅ 返回防骗训练</button>
-      <button class="export-btn" @click="exportToPDF">📄 下载司法级PDF报告</button>
+    <!-- 全宽一行：左「返回主页」与右全文/下载同一水平线；左右与 .report-view 对称 padding 对齐 -->
+    <div class="report-top-bar">
+      <button type="button" class="btn-back-home" @click="goBack">返回主页</button>
+      <div class="report-doc-actions">
+        <button type="button" class="theory-pdf-btn" @click="openTheoryPdf">
+          查看《防诈意识指标及理论支撑》全文
+        </button>
+        <button type="button" class="export-btn" @click="exportToPDF">下载</button>
+      </div>
     </div>
 
     <div id="pdf-content" class="formal-report">
       <header class="report-header">
         <h1 class="main-title">智盾·个人认知安全评估鉴定书</h1>
         <div class="report-meta">
-          <span>鉴定编号：ZD-{{ reportId }}</span>
           <span>生成时间：{{ currentDate }}</span>
         </div>
       </header>
 
       <div class="doc-source-banner">
-        <p class="doc-source-title">依据文档：《防诈意识指标及理论支撑》(1)(1)</p>
+        <p class="doc-source-title">依据文档：《防诈意识指标及理论支撑》</p>
         <p class="report-source">
-          下方「一、六维鉴定明细」的<strong>维度名称、满分权重、定义与场景</strong>，以及「二、理论依据」的<strong>摘要段落</strong>，均按该 PDF
-          整理写入本页；雷达图为根据训练得分折算的参考画像。
+          下方“六维认知防线鉴定明细”的<strong>维度名称、满分权重、定义与场景</strong>，以及“指标内涵与理论依据（摘要）”的<strong>摘要段落</strong>，均按《防诈意识指标及理论支撑》整理写入本页；雷达图为根据训练得分折算的参考画像。
         </p>
       </div>
 
@@ -30,13 +34,15 @@
             <span class="score-label">分</span>
           </div>
           <p class="score-sub">训练闯关得分（百分制）</p>
-          <p class="score-dim-sum">六维折算合计：<strong>{{ dimSum }}</strong> / {{ TOTAL_DIM_MAX }} 分</p>
-          <div class="risk-badge" :class="riskLevel.class">
+          <p class="risk-level-plain" :class="riskLevel.class">
             评定等级：{{ riskLevel.label }}
-          </div>
+          </p>
         </div>
         <div class="radar-box">
           <div ref="radarChartRef" class="radar-chart"></div>
+          <p class="score-dim-sum">
+            六维折算合计：<strong>{{ dimSum }}</strong> / {{ TOTAL_DIM_MAX }} 分
+          </p>
         </div>
       </section>
 
@@ -66,7 +72,7 @@
       <section class="theory-section">
         <h2 class="section-title">二、指标内涵与理论依据（摘要）</h2>
         <p class="theory-lead">
-          与 PDF《防诈意识指标及理论支撑》各章对应；正文为便于阅读的浓缩摘要，完整论述请以原 PDF 为准。
+          与《防诈意识指标及理论支撑》各章对应；正文为便于阅读的浓缩摘要，完整论述请以《防诈意识指标及理论支撑》为准。
         </p>
         <div v-for="block in theoryBlocks" :key="block.title" class="theory-card">
           <h3 class="theory-h3">{{ block.title }}</h3>
@@ -80,7 +86,7 @@
           <p><strong>{{ riskLevel.adviceTitle }}</strong></p>
           <p>{{ riskLevel.adviceContent }}</p>
           <p class="warning-text">
-            ⚠️ 警方提示：未知链接不点击，陌生来电不轻信，个人信息不透露，转账汇款多核实。如遇可疑情况，请立即拨打
+            警方提示：未知链接不点击，陌生来电不轻信，个人信息不透露，转账汇款多核实。如遇可疑情况，请立即拨打
             <strong>110</strong> 或全国反诈专线 <strong>96110</strong>！
           </p>
         </div>
@@ -88,8 +94,8 @@
 
       <footer class="report-footer">
         <div class="stamp-box">
-          <p><strong>智盾反诈研究中心</strong></p>
-          <p>（由认知疫苗评估系统自动生成，仅供防范参考）</p>
+          <p><strong>“银龄智盾”项目团队</strong></p>
+          <p>（本报告由“银龄智盾”系统依据训练与演练数据自动生成，仅供个人防范参考）</p>
         </div>
       </footer>
     </div>
@@ -97,12 +103,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import html2pdf from 'html2pdf.js'
+import { clampPercentScore } from '../utils/trainingScore.js'
 
 const emit = defineEmits(['go-home'])
 const radarChartRef = ref(null)
+const radarChartInst = ref(null)
+let radarResizeObserver = null
 const finalScore = ref(100)
 
 const TOTAL_DIM_MAX = 105
@@ -206,13 +215,32 @@ function deriveDimScores(fs) {
   return maxes.map((m, i) => Math.min(m, Math.max(0, Math.round(m * t * seeds[i]))))
 }
 
-onMounted(() => {
+function handleRadarResize() {
+  radarChartInst.value?.resize()
+}
+
+onMounted(async () => {
   const savedScore = localStorage.getItem('zhidun_final_score')
-  if (savedScore) {
-    finalScore.value = parseInt(savedScore, 10)
+  if (savedScore !== null && savedScore !== '') {
+    finalScore.value = clampPercentScore(parseInt(savedScore, 10), 100)
   }
   dimScores.value = deriveDimScores(finalScore.value)
+  await nextTick()
   initRadarChart()
+  window.addEventListener('resize', handleRadarResize)
+  const el = radarChartRef.value
+  if (el && typeof ResizeObserver !== 'undefined') {
+    radarResizeObserver = new ResizeObserver(handleRadarResize)
+    radarResizeObserver.observe(el)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleRadarResize)
+  radarResizeObserver?.disconnect()
+  radarResizeObserver = null
+  radarChartInst.value?.dispose()
+  radarChartInst.value = null
 })
 
 const riskLevel = computed(() => {
@@ -220,7 +248,7 @@ const riskLevel = computed(() => {
     return {
       class: 'safe',
       label: '抗体已形成',
-      adviceTitle: '✅ 状态优良，表现出色！',
+      adviceTitle: '状态优良，表现出色！',
       adviceContent:
         '您的防骗意识较强。建议继续参与社区反诈宣传，与家人保持沟通，巩固“遇事核实、转账谨慎”的习惯。'
     }
@@ -229,7 +257,7 @@ const riskLevel = computed(() => {
     return {
       class: 'warning',
       label: '存在易感风险',
-      adviceTitle: '⚠️ 易感预警，防线存在漏洞！',
+      adviceTitle: '易感预警，防线存在漏洞！',
       adviceContent:
         '面对“政策”“权威”“高回报”话术时易产生动摇。请多与子女或社区民警商量，避免单独做出大额或证件类决定。'
     }
@@ -237,7 +265,7 @@ const riskLevel = computed(() => {
   return {
     class: 'danger',
     label: '高危易骗体质',
-    adviceTitle: '🚨 高危干预，极易落入圈套！',
+    adviceTitle: '高危干预，极易落入圈套！',
     adviceContent:
       '在恐慌或情感攻势下易失去冷静。请将本报告分享给家人，安装“国家反诈中心”APP，并保存社区与民警联系方式。'
   }
@@ -282,23 +310,36 @@ function getComment(key) {
 }
 
 function initRadarChart() {
-  const myChart = echarts.init(radarChartRef.value)
+  const el = radarChartRef.value
+  if (!el) return
+  radarChartInst.value?.dispose()
+  radarChartInst.value = null
+  const myChart = echarts.init(el)
+  radarChartInst.value = myChart
   const values = dimScores.value
   const option = {
     animation: false,
     backgroundColor: '#ffffff',
     tooltip: {},
     radar: {
+      // 略下移、略缩小半径，为四周轴名称（尤其正上方两行字）留出画布空间，避免裁切
+      center: ['50%', '55%'],
+      radius: '52%',
+      nameGap: 14,
       indicator: dimensionRows.map((d) => ({
         name: `${d.name}\n(满分${d.max})`,
         max: d.max
       })),
       shape: 'polygon',
-      radius: '65%',
-      axisName: { color: '#333', fontSize: 13, fontWeight: 'bold' },
-      splitArea: { areaStyle: { color: ['#f8f9fa', '#e9ecef'] } },
-      axisLine: { lineStyle: { color: '#adb5bd' } },
-      splitLine: { lineStyle: { color: '#adb5bd' } }
+      axisName: {
+        color: '#475569',
+        fontSize: 15,
+        fontWeight: '600',
+        lineHeight: 20
+      },
+      splitArea: { areaStyle: { color: ['#f8fafc', '#f1f5f9'] } },
+      axisLine: { lineStyle: { color: '#b8cfe0' } },
+      splitLine: { lineStyle: { color: '#e2ebf2' } }
     },
     series: [
       {
@@ -308,15 +349,16 @@ function initRadarChart() {
           {
             value: values,
             name: '本次折算结果',
-            areaStyle: { color: 'rgba(139, 0, 0, 0.2)' },
-            lineStyle: { color: '#8b0000', width: 3 },
-            itemStyle: { color: '#8b0000' }
+            areaStyle: { color: 'rgba(127, 166, 194, 0.28)' },
+            lineStyle: { color: '#7fa6c2', width: 2 },
+            itemStyle: { color: '#7fa6c2' }
           }
         ]
       }
     ]
   }
   myChart.setOption(option)
+  requestAnimationFrame(() => myChart.resize())
 }
 
 function exportToPDF() {
@@ -334,124 +376,202 @@ function exportToPDF() {
 function goBack() {
   emit('go-home')
 }
+
+/** 在新标签页打开依据文档 PDF（文件位于 public/，随前端静态资源部署） */
+function openTheoryPdf() {
+  const base = import.meta.env.BASE_URL || '/'
+  const prefix = base.endsWith('/') ? base : `${base}/`
+  window.open(`${prefix}防诈意识指标及理论支撑.pdf`, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <style scoped>
+/* 外层与 TrainingView .training-view 一致；白框宽度与全局 --zd-content-card-max 一致 */
 .report-view {
+  --zd-burgundy: var(--zd-plate-ink, #5b7c99);
   min-height: 100vh;
-  background-color: #2b2b2b;
-  padding: 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: min(1280px, 100%);
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--zd-plate-page-bg, #f5f7fa);
+  /* 与 TrainingView .training-view 同 padding，保证「返回主页」与板块二左上角对齐 */
+  padding: clamp(14px, 2.2vw, 28px) clamp(12px, 2.2vw, 32px);
+  font-family: var(--zd-font, 'Microsoft YaHei', sans-serif);
 }
 
-.controls-bar {
+/* 全宽顶栏（与板块二 .selector-toolbar 一致），勿再 max-width 居中，否则按钮会随白卡内收 */
+.report-top-bar {
   width: 100%;
-  max-width: 900px;
+  margin: 0 0 6px;
   display: flex;
   justify-content: space-between;
-  margin-bottom: 20px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  box-sizing: border-box;
 }
 
-.back-btn,
-.export-btn {
-  padding: 15px 30px;
-  font-size: 20px;
-  font-weight: bold;
-  border-radius: 8px;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
+.report-doc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.back-btn {
-  background: #555;
+.btn-back-home {
+  padding: 10px 20px;
+  font-size: clamp(18px, 1.8vw, 21px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: #fff;
+  background: var(--zd-plate-btn-bg-flat, #7fa6c2);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 3px 12px rgba(127, 166, 194, 0.36),
+    0 2px 5px rgba(80, 52, 12, 0.09);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
-.back-btn:hover {
-  background: #777;
+.btn-back-home:hover {
+  background: var(--zd-plate-btn-hover, #6b93af);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 6px 18px rgba(127, 166, 194, 0.42),
+    0 3px 8px rgba(80, 52, 12, 0.11);
+}
+.btn-back-home:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 2px 8px rgba(127, 166, 194, 0.32),
+    0 1px 3px rgba(80, 52, 12, 0.08);
 }
 
-.export-btn {
-  background: #8b0000;
-  color: #ffd700;
-  border: 2px solid #ffd700;
+.export-btn,
+.theory-pdf-btn {
+  padding: 10px 16px;
+  min-height: 52px;
+  font-size: clamp(17px, 1.7vw, 20px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: var(--zd-plate-btn-bg-flat, #7fa6c2);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 3px 12px rgba(127, 166, 194, 0.36),
+    0 2px 5px rgba(80, 52, 12, 0.09);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
-.export-btn:hover {
-  background: #a50000;
+
+.export-btn:hover,
+.theory-pdf-btn:hover {
+  background: var(--zd-plate-btn-hover, #6b93af);
   transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 6px 18px rgba(127, 166, 194, 0.42),
+    0 3px 8px rgba(80, 52, 12, 0.11);
+}
+
+.export-btn:active,
+.theory-pdf-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 2px 8px rgba(127, 166, 194, 0.32),
+    0 1px 3px rgba(80, 52, 12, 0.08);
 }
 
 .formal-report {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: var(--zd-surface, #fff);
+  color: var(--zd-ink, #2c2825);
   width: 100%;
-  max-width: 900px;
-  padding: 50px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  font-family: 'SimSun', 'STSong', serif;
+  max-width: var(--zd-content-card-max, min(1000px, 100%));
+  margin: 0 auto;
+  padding: clamp(28px, 4.5vw, 42px);
+  /* 描边与训练页分类卡一致；max-width 见 :root --zd-content-card-max */
+  border: 1px solid rgba(127, 166, 194, 0.4);
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(91, 124, 153, 0.08);
+  font-family: var(--zd-font, 'Microsoft YaHei', 'SimSun', serif);
 }
 
 .report-header {
   text-align: center;
-  border-bottom: 3px solid #8b0000;
-  padding-bottom: 20px;
-  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(127, 166, 194, 0.45);
+  padding-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .doc-source-banner {
-  margin-bottom: 28px;
-  padding: 16px 18px;
-  background: linear-gradient(180deg, #fff8e8 0%, #fffef8 100%);
-  border: 3px solid #8b0000;
-  border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #fff9f2 0%, #fff 100%);
+  border: 1px solid rgba(184, 149, 47, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(44, 40, 37, 0.05);
 }
 
 .doc-source-title {
-  font-size: 22px;
-  font-weight: bold;
-  color: #8b0000;
-  margin: 0 0 10px 0;
-  letter-spacing: 1px;
+  font-size: clamp(20px, 2.25vw, 23px);
+  font-weight: 700;
+  color: var(--zd-burgundy, #5b7c99);
+  margin: 0 0 8px 0;
+  letter-spacing: 0.04em;
 }
 
 .report-source {
-  font-size: 16px;
+  font-size: clamp(18px, 2vw, 20px);
   line-height: 1.65;
-  color: #333;
+  color: var(--zd-ink-muted, #5e5852);
   margin: 0;
 }
 
 .main-title {
-  font-size: 42px;
-  color: #8b0000;
-  letter-spacing: 4px;
-  margin-bottom: 15px;
+  font-size: clamp(28px, 4.4vw, 37px);
+  font-weight: 700;
+  color: var(--zd-burgundy, #5b7c99);
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
 }
 
 .report-meta {
   display: flex;
-  justify-content: space-between;
-  color: #666;
-  font-size: 18px;
+  justify-content: center;
+  color: #64748b;
+  font-size: clamp(18px, 1.95vw, 20px);
 }
 
 .section-title {
-  font-size: 28px;
-  color: #8b0000;
-  border-left: 6px solid #8b0000;
-  padding-left: 15px;
-  margin-bottom: 20px;
-  font-weight: bold;
+  font-size: clamp(23px, 2.55vw, 26px);
+  font-weight: 700;
+  color: var(--zd-burgundy, #5b7c99);
+  border-left: 4px solid var(--zd-burgundy, #5b7c99);
+  padding-left: 12px;
+  margin-bottom: 14px;
 }
 
 .overview-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 40px;
-  gap: 20px;
+  margin-bottom: 28px;
+  gap: 16px;
 }
 
 .score-box {
@@ -460,86 +580,104 @@ function goBack() {
 }
 
 .score-circle {
-  width: 180px;
-  height: 180px;
+  width: clamp(150px, 38vw, 170px);
+  height: clamp(150px, 38vw, 170px);
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: baseline;
-  margin: 20px auto;
-  border: 8px solid;
+  margin: 14px auto;
+  border: 6px solid;
 }
 
 .score-number {
-  font-size: 72px;
+  font-size: clamp(52px, 12.5vw, 62px);
   font-weight: bold;
-  margin-top: 40px;
+  margin-top: 28px;
 }
 .score-label {
-  font-size: 24px;
+  font-size: clamp(21px, 2.35vw, 24px);
 }
 
 .score-sub {
-  font-size: 18px;
+  font-size: clamp(17px, 1.9vw, 19px);
   color: #555;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
-.score-dim-sum {
-  font-size: 17px;
-  color: #333;
-  margin-bottom: 12px;
+/* 评定等级：仅文字着色，不再使用左侧实心色条（原 .risk-badge） */
+.risk-level-plain {
+  font-size: clamp(18px, 2vw, 21px);
+  font-weight: 600;
+  margin: 10px 0 0;
+  line-height: 1.4;
 }
 
-.risk-badge {
-  font-size: 24px;
-  font-weight: bold;
-  padding: 10px 20px;
-  border-radius: 50px;
-  display: inline-block;
-  color: #fff;
+.risk-level-plain.safe {
+  color: #15803d;
+}
+
+.risk-level-plain.warning {
+  color: #b45309;
+}
+
+.risk-level-plain.danger {
+  color: #b91c1c;
 }
 
 .safe {
   border-color: #28a745;
   color: #28a745;
 }
-.safe.risk-badge {
-  background-color: #28a745;
-}
 
 .warning {
   border-color: #ffc107;
   color: #d39e00;
-}
-.warning.risk-badge {
-  background-color: #ffc107;
-  color: #000;
 }
 
 .danger {
   border-color: #dc3545;
   color: #dc3545;
 }
-.danger.risk-badge {
-  background-color: #dc3545;
-}
 
 .radar-box {
   flex: 1;
-  height: 350px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  min-height: 300px;
+  /* 为雷达图顶部轴标签预留空隙，避免被父级裁切 */
+  padding-top: 10px;
+  box-sizing: border-box;
 }
+
 .radar-chart {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 320px;
+  /* 给 ECharts 画布足够高度，六维标签（两行）才能完整绘制 */
+  min-width: 220px;
+  box-sizing: border-box;
+}
+
+.score-dim-sum {
+  font-size: clamp(17px, 1.9vw, 19px);
+  color: #333;
+  margin: 12px 0 0;
+  text-align: center;
+  width: 100%;
+  line-height: 1.5;
 }
 
 .detail-section {
-  margin-bottom: 40px;
+  margin-bottom: 28px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dim-max {
-  font-size: 14px;
+  font-size: clamp(16px, 1.7vw, 18px);
   color: #555;
   font-weight: normal;
 }
@@ -547,21 +685,22 @@ function goBack() {
 .analysis-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 17px;
+  font-size: clamp(17px, 1.9vw, 19px);
   line-height: 1.5;
 }
 
 .analysis-table th,
 .analysis-table td {
-  border: 1px solid #000;
-  padding: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 10px 12px;
   text-align: left;
   vertical-align: top;
 }
 
 .analysis-table th {
-  background-color: #f8f9fa;
-  font-weight: bold;
+  background-color: #f1f5f9;
+  font-weight: 700;
+  color: var(--zd-ink-muted, #5e5852);
 }
 
 .theory-section {
@@ -569,64 +708,80 @@ function goBack() {
 }
 
 .theory-lead {
-  font-size: 17px;
+  font-size: clamp(18px, 2vw, 20px);
   color: #444;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .theory-card {
-  margin-bottom: 16px;
-  padding: 14px 16px 16px;
-  background: #fafafa;
-  border: 1px solid #ccc;
-  border-left: 6px solid #8b0000;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: rgba(127, 166, 194, 0.08);
+  border: 1px solid rgba(127, 166, 194, 0.35);
+  border-left: 4px solid var(--zd-plate-card, #7fa6c2);
+  border-radius: 0 8px 8px 0;
 }
 
 .theory-h3 {
-  font-size: 19px;
-  font-weight: bold;
-  color: #8b0000;
-  margin: 0 0 8px 0;
+  font-size: clamp(19px, 2.15vw, 22px);
+  font-weight: 700;
+  color: var(--zd-burgundy, #5b7c99);
+  margin: 0 0 6px 0;
 }
 
 .theory-body {
   margin: 0;
-  font-size: 16px;
+  font-size: clamp(17px, 1.9vw, 19px);
   line-height: 1.65;
   color: #333;
 }
 
 .expert-section {
-  margin-bottom: 50px;
+  margin-bottom: 36px;
 }
 
 .advice-box {
-  padding: 25px;
-  border: 2px solid;
-  border-radius: 8px;
-  font-size: 20px;
-  line-height: 1.8;
-  background-color: #fafafa;
+  padding: 20px;
+  border: 1px solid var(--zd-border, rgba(74, 60, 48, 0.14));
+  border-radius: 10px;
+  font-size: clamp(18px, 2vw, 21px);
+  line-height: 1.65;
+  background: #fafaf9;
+}
+
+.advice-box.safe {
+  border-color: rgba(22, 101, 52, 0.35);
+  background: linear-gradient(180deg, #f0fdf4 0%, #fafafa 100%);
+}
+
+.advice-box.warning {
+  border-color: rgba(180, 130, 0, 0.4);
+  background: linear-gradient(180deg, #fffbeb 0%, #fafafa 100%);
+}
+
+.advice-box.danger {
+  border-color: rgba(185, 28, 28, 0.38);
+  background: linear-gradient(180deg, #fef2f2 0%, #fafafa 100%);
 }
 
 .advice-box p {
   margin-bottom: 15px;
 }
 .warning-text {
-  color: #8b0000;
-  font-weight: bold;
+  color: var(--zd-burgundy, #5b7c99);
+  font-weight: 700;
 }
 
 .report-footer {
   text-align: right;
-  margin-top: 50px;
-  padding-top: 20px;
-  border-top: 2px dashed #ccc;
+  margin-top: 36px;
+  padding-top: 16px;
+  border-top: 1px dashed #cbd5e1;
 }
 
 .stamp-box p {
-  font-size: 18px;
-  line-height: 1.6;
+  font-size: clamp(17px, 1.9vw, 19px);
+  line-height: 1.55;
   color: #555;
 }
 </style>

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List
 import os
@@ -10,6 +10,7 @@ import json
 
 import edge_tts
 from llm_service import stream_chat, MODEL, format_shanghai_now
+from tts_cosyvoice import cosyvoice_sft_to_wav, tts_engine_label
 
 app = FastAPI(title="智盾反诈骗系统")
 
@@ -94,18 +95,26 @@ def api_health():
         "llm": "deepseek",
         "model": MODEL,
         "shanghai_now": format_shanghai_now(),
-        "tts": "edge-tts",
+        "tts": tts_engine_label(),
         "tts_voice": os.getenv("EDGE_TTS_VOICE", "zh-CN-XiaoxiaoNeural"),
     }
 
 
 @app.post("/api/tts")
 async def api_tts(body: TTSRequest):
-    """微软 Edge 同款神经网络中文语音（云端合成，无需用户本机安装语音包）。"""
+    """
+    语音合成：若配置 COSYVOICE_URL 则优先走 CosyVoice（本地神经网络，音质更自然）；
+    否则或未启用时使用 edge-tts（云端 MP3）。
+    """
+    text = body.text.strip()
+    wav = await cosyvoice_sft_to_wav(text)
+    if wav:
+        return Response(content=wav, media_type="audio/wav")
+
     voice = os.getenv("EDGE_TTS_VOICE", "zh-CN-XiaoxiaoNeural")
 
     async def audio_stream():
-        communicate = edge_tts.Communicate(body.text.strip(), voice)
+        communicate = edge_tts.Communicate(text, voice)
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 yield chunk["data"]
@@ -141,6 +150,16 @@ def get_scenarios():
         {"id": "baoxian", "name": "百万保障", "difficulty": "高级"}
     ]
 
+def _load_scenarios_from_json_file():
+    """数据库未初始化时，从同目录 scenarios.json 读取，便于本地开发未执行 seed 时仍能加载剧本。"""
+    base = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(base, "scenarios.json")
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"categories": []}
+
+
 @app.get("/api/scenarios")
 def get_scenarios():
     conn = sqlite3.connect('zhidun.db')
@@ -154,7 +173,7 @@ def get_scenarios():
             # 将数据库里存的文本转回 JSON 字典发送给前端
             return json.loads(result[0])
         else:
-            return {"categories": []} # 如果没数据，返回空结构
+            return _load_scenarios_from_json_file()
     except Exception as e:
         return {"error": str(e)}
     finally:
