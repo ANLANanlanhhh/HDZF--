@@ -1,0 +1,26 @@
+
+> zhidun-frontend@1.0.0 dev
+> vite
+
+Re-optimizing dependencies because vite config has changed
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m429[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[2m23:14:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/TrainingView.vue, /src/components/ChatView.vue[22m
+[2m23:14:25[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[2m23:14:42[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ReportView.vue[22m
+[2m23:14:56[22m [36m[1m[vite][22m[39m [32mvite.config.js changed, restarting server...[39m
+[2m23:14:56[22m [36m[1m[vite][22m[39m server restarted.
+[2m23:17:12[22m [36m[1m[vite][22m[39m [32mvite.config.js changed, restarting server...[39m
+[2m23:17:13[22m [36m[1m[vite][22m[39m server restarted.
+[2m23:28:02[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/HomeView.vue[22m
+[2m23:35:55[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ChatView.vue[22m
+[2m23:38:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ChatView.vue[22m
+[2m23:44:35[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ChatView.vue[22m
+[2m23:48:38[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ChatView.vue[22m
+[2m23:49:54[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ChatView.vue[22m
+[2m23:57:23[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ChatView.vue[22m
+[2m23:58:00[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ChatView.vue[22m

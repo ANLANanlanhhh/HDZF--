@@ -1,0 +1,22 @@
+{
+  "name": "zhidun-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "prebuild": "node scripts/check-node-version.cjs",
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "engines": {
+    "node": "20.x || 22.x || >=24.14.0"
+  },
+  "dependencies": {
+    "echarts": "^6.0.0",
+    "html2pdf.js": "^0.14.0",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+}
